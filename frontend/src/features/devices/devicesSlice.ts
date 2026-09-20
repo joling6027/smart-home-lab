@@ -1,51 +1,45 @@
-import { createSlice, type PayloadAction } from "@reduxjs/toolkit";
-import type { Device } from "./types";
+import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
+import type { HomeAssistantEntity } from "./types";
+import { getStates } from "../../services/homeAssistantApi";
 
 interface DevicesState {
-    items: Device[];
+    entities: HomeAssistantEntity[];
+    loading: boolean;
+    error: string | null;
 }
 
 const initialState: DevicesState = {
-    items: [
-        {
-            id: "light.floor_lamp",
-            name: "Floor Lamp",
-            type: "light",
-            state: "off"
-        },
-        {
-            id: "fan.living_room_fan",
-            name: "Living Room Fan",
-            type: "fan",
-            state: "off"
-        },
-        {
-            id: "sensor.living_room_temperature",
-            name: "Living Room Temperature",
-            type: "sensor",
-            state: "22.5"
-        }
-    ],
+    entities: [],
+    loading: false,
+    error: null
 };
+
+export const fetchDevices = createAsyncThunk(
+    "devices/fetchDevices",
+    async () => {
+        return await getStates();
+    }
+)
 
 const devicesSlice = createSlice({
     name: "devices",
     initialState,
-    reducers: {
-        updateDeviceState(
-            state,
-            action: PayloadAction<{ id: string; state: string }>
-        ) {
-            const device = state.items.find(
-                item => item.id === action.payload.id
-            );
-
-            if (device) {
-                device.state = action.payload.state;
-            }
-        }
+    reducers: {},
+    extraReducers: builder => {
+        builder
+            .addCase(fetchDevices.pending, state => {
+                state.loading = true;
+                state.error = null;
+            })
+            .addCase(fetchDevices.fulfilled, (state, action) => {
+                state.loading = false;
+                state.entities = action.payload;
+            })
+            .addCase(fetchDevices.rejected, (state, action) => {
+                state.loading = false;
+                state.error = action.error.message ?? "Failed to fetch devices";
+            });
     }
 });
 
-export const { updateDeviceState } = devicesSlice.actions;
 export default devicesSlice.reducer;
