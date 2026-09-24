@@ -31,6 +31,18 @@ export function setupFan() {
         COMMAND_TOPIC,
         SPEED_COMMAND_TOPIC
     ]);
+
+    client.publish(
+        STATE_TOPIC,
+        fanState,
+        { retain: true }
+    )
+
+    client.publish(
+        SPEED_STATE_TOPIC,
+        SPEED_COMMAND_TOPIC.toString(),
+        { retain: true }
+    )
 };
 
 export function handleFanMessage(

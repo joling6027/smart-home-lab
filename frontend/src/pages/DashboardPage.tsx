@@ -7,6 +7,11 @@ import type {
 } from "../store/store";
 
 import { fetchDevices } from "../features/devices/devicesSlice";
+import { connectHomeAssistantSocket } from "../services/homeAssistantSocket";
+
+import LightCard from "../components/devices/LightCard";
+import FanCard from "../components/devices/FanCard";
+import SensorCard from "../components/devices/SensorCard";
 
 export default function DashboardPage() {
     const dispatch = useDispatch<AppDispatch>();
@@ -15,6 +20,11 @@ export default function DashboardPage() {
 
     useEffect(() => {
         dispatch(fetchDevices());
+
+        const socket = connectHomeAssistantSocket(dispatch);
+        return () => {
+            socket.close();
+        }
     }, [dispatch]);
 
     if (loading) {
@@ -29,14 +39,36 @@ export default function DashboardPage() {
         <main>
             <h1>Smart Home</h1>
 
-            {entities.map(entity => (
-                <div key={entity.entity_id}>
-                    <strong>
-                        {entity.attibutes.friendly_name ?? entity.entity_id}
-                    </strong>
-                    <div>{entity.state}</div>
-                </div>
-            ))}
+            {entities.map(entity => {
+                if (entity.entity_id.startsWith("light.")) {
+                    return (
+                        <LightCard
+                            key={entity.entity_id}
+                            entity={entity}
+                        />
+                    )
+                }
+
+                if (entity.entity_id.startsWith("fan.")) {
+                    return (
+                        <FanCard
+                            key={entity.entity_id}
+                            entity={entity}
+                        />
+                    )
+                }
+
+                if (entity.entity_id.startsWith("sensor.")) {
+                    return (
+                        <SensorCard
+                            key={entity.entity_id}
+                            entity={entity}
+                        />
+                    )
+                }
+
+                return null;
+            })}
         </main>
     )
 }

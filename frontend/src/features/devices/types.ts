@@ -9,7 +9,7 @@ export interface HomeAssistantEntity {
     entity_id: string;
     state: string;
 
-    attibutes: {
+    attributes?: {
         friendly_name?: string;
         unit_of_measurement?: string;
         brightness?: number;
@@ -18,6 +18,6 @@ export interface HomeAssistantEntity {
         [key: string]: unknown;
     };
 
-    last_changed: string;
-    last_updated: string;
+    last_changed?: string;
+    last_updated?: string;
 }

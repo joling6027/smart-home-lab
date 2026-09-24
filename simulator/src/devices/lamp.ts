@@ -33,6 +33,18 @@ export function setupLamp() {
     COMMAND_TOPIC,
     BRIGHTNESS_COMMAND_TOPIC
   ]);
+
+  client.publish(
+    STATE_TOPIC,
+    state,
+    { retain: true }
+  );
+
+  client.publish(
+    BRIGHTNESS_STATE_TOPIC,
+    brightness.toString(),
+    { retain: true }
+  );
 }
 
 export function handleLampMessage(

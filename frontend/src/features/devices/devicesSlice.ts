@@ -1,4 +1,4 @@
-import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
+import { createSlice, createAsyncThunk, type PayloadAction } from "@reduxjs/toolkit";
 import type { HomeAssistantEntity } from "./types";
 import { getStates } from "../../services/homeAssistantApi";
 
@@ -14,6 +14,12 @@ const initialState: DevicesState = {
     error: null
 };
 
+const TRACKED_ENTITY_IDS = new Set([
+    "sensor.living_room_temperature",
+    "light.floor_lamp",
+    "fan.fan"
+]);
+
 export const fetchDevices = createAsyncThunk(
     "devices/fetchDevices",
     async () => {
@@ -24,7 +30,29 @@ export const fetchDevices = createAsyncThunk(
 const devicesSlice = createSlice({
     name: "devices",
     initialState,
-    reducers: {},
+    reducers: {
+        updateEntity(
+            state,
+            action: PayloadAction<HomeAssistantEntity>
+        ) {
+            const entity = action.payload;
+
+            console.log(
+                "Redux updating entity:",
+                entity.entity_id,
+                entity.state,
+                entity.attributes
+            );
+            
+            const index = state.entities.findIndex(
+                item => item.entity_id === entity.entity_id
+            );
+            if (index === -1) {
+                return;
+            }
+            state.entities[index] = entity;
+        }
+    },
     extraReducers: builder => {
         builder
             .addCase(fetchDevices.pending, state => {
@@ -33,7 +61,9 @@ const devicesSlice = createSlice({
             })
             .addCase(fetchDevices.fulfilled, (state, action) => {
                 state.loading = false;
-                state.entities = action.payload;
+                state.entities = action.payload.filter(entity => 
+                    TRACKED_ENTITY_IDS.has(entity.entity_id)
+                );
             })
             .addCase(fetchDevices.rejected, (state, action) => {
                 state.loading = false;
@@ -43,3 +73,4 @@ const devicesSlice = createSlice({
 });
 
 export default devicesSlice.reducer;
+export const { updateEntity } = devicesSlice.actions;
