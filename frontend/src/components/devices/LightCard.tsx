@@ -21,7 +21,8 @@ export default function LightCard({
     : 0;
 
   const [sliderValue, setSliderValue] = useState(brightness);
-  const timerRef = useRef<ReturnType<typeof setTimeout | null>>(null);
+  const timerRef =
+    useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     setSliderValue(brightness);

@@ -27,7 +27,8 @@ export default function FanCard({
       : 0;
 
   const [sliderValue, setSliderValue] = useState(percentage);
-  const timerRef = useRef<ReturnType<typeof setTimeout | null>>(null);
+  const timerRef =
+    useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     setSliderValue(percentage);
