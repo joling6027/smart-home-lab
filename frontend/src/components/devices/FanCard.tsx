@@ -1,6 +1,5 @@
 import {
   useEffect,
-  useRef,
   useState
 } from "react";
 
@@ -11,6 +10,7 @@ import {
   turnOffFan,
   setFanSpeed
 } from "../../services/homeAssistantApi";
+import { useDebouncedCallback } from "../../hooks/useDebouncedCallback";
 
 interface FanCardProps {
   entity: HomeAssistantEntity;
@@ -27,23 +27,36 @@ export default function FanCard({
       : 0;
 
   const [sliderValue, setSliderValue] = useState(percentage);
-  const timerRef =
-    useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [sliderError, setSliderError] = useState<string | null>(null);
+
+  const debouncedSetFanSpeed = useDebouncedCallback(
+    async (speed: number) => {
+      try {
+        setSliderError(null);
+
+        await setFanSpeed(
+          entity.entity_id,
+          speed
+        );
+      } catch (error) {
+        console.error(
+          "Failed to change fan speed:",
+          error
+        );
+      }
+    }, 300
+  )
 
   useEffect(() => {
     setSliderValue(percentage);
   },[percentage]);
 
-  useEffect(() => {
-    return () => {
-      if (timerRef.current) {
-        clearTimeout(timerRef.current);
-      }
-    }
-  },[])
-
   async function handleToggle() {
     try {
+      setIsUpdating(true);
+      setSliderError(null);
+
       if (isOn) {
         await turnOffFan(entity.entity_id)
       } else {
@@ -51,32 +64,19 @@ export default function FanCard({
       }
     } catch (error) {
       console.error("Failed to toggle fan:", error);
+
+      setSliderError("Failed to update fan.");
+    } finally {
+      setIsUpdating(false);
     }
   }
 
-  async function handleSpeedChange(
+  function handleSpeedChange(
     speed: number
   ) {
     setSliderValue(speed);
 
-    if (timerRef.current) {
-      clearTimeout(timerRef.current);
-    }
-
-    // Wait until the user pauses
-    timerRef.current = setTimeout(async () => {
-      try {
-        await setFanSpeed(
-          entity.entity_id,
-          speed
-        );
-      } catch (error) {
-        console.error(
-          "Failed to change speed:",
-          error
-        );
-      }
-    })
+    debouncedSetFanSpeed(speed);
   }
 
   return (
@@ -87,7 +87,10 @@ export default function FanCard({
       </h3>
 
       <button onClick={handleToggle}>
-        {isOn ? "Turn Off" : "Turn On"}
+        {isUpdating ? "Updating..." 
+          : isOn 
+            ? "Turn Off" 
+            : "Turn On"}
       </button>
 
       <div>
@@ -106,6 +109,9 @@ export default function FanCard({
             )
           }
         />
+        {sliderError && (
+          <p role="alert">{sliderError}</p>
+        )}
       </div>
     </article>
   );

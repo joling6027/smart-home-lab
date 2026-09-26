@@ -1,10 +1,12 @@
 import type { HomeAssistantEntity } from "../../features/devices/types";
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   turnOnLight,
   turnOffLight,
   setLightBrightness
 } from "../../services/homeAssistantApi";
+
+import { useDebouncedCallback } from "../../hooks/useDebouncedCallback";
 
 interface LightCardProps {
   entity: HomeAssistantEntity;
@@ -21,23 +23,32 @@ export default function LightCard({
     : 0;
 
   const [sliderValue, setSliderValue] = useState(brightness);
-  const timerRef =
-    useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const debouncedSetLightBrightness = useDebouncedCallback(
+    async (brightness: number) => {
+      try {
+        setError(null);
+
+        await setLightBrightness(entity.entity_id, brightness);
+      } catch (error) {
+        console.error("Failed to change light brightness");
+        setError("Failed to update light brightness");
+      }
+    },
+    300
+  )
 
   useEffect(() => {
     setSliderValue(brightness);
   }, [brightness]);
 
-  useEffect(() => {
-    return () => {
-      if (timerRef.current) {
-        clearTimeout(timerRef.current);
-      }
-    }
-  })
-
   async function handleToggle() {
     try {
+      setIsUpdating(true);
+      setError(null);
+
       if (isOn) {
         await turnOffLight(entity.entity_id)
       } else {
@@ -45,31 +56,18 @@ export default function LightCard({
       }
     } catch (error) {
       console.error("Failed to toggle light:", error);
+
+      setError("Failed to update light.");
+    } finally {
+      setIsUpdating(false);
     }
   }
-  async function handleBrightnessChange(
+  function handleBrightnessChange(
     value: number
   ) {
 
     setSliderValue(value);
-
-    if (timerRef.current) {
-      clearTimeout(timerRef.current)
-    }
-
-    timerRef.current = setTimeout(async () => {
-      try {
-        await setLightBrightness(
-          entity.entity_id,
-          value
-        );
-      } catch (error) {
-        console.error(
-          "Failed to change brightness:",
-          error
-        );
-      }
-    }, 300)
+    debouncedSetLightBrightness(value);
   }
 
   return (
@@ -78,24 +76,30 @@ export default function LightCard({
         {entity.attributes?.friendly_name ?? entity.entity_id}
       </h3>
 
-      <button onClick={handleToggle}>
-        {isOn? "Turn Off" : "Turn On"}
+      <button onClick={handleToggle} disabled={isUpdating}>
+        {isUpdating ? "Updating..." 
+          : isOn 
+            ? "Turn Off" 
+            : "Turn On"}
       </button>
 
       <div>
         <label>
-          Brightness: {brightness}
+          Brightness: {sliderValue}
         </label>
 
         <input
           type="range"
           min="0"
           max="255"
-          value={brightness}
+          value={sliderValue}
           onChange={event => handleBrightnessChange(
             Number(event.target.value)
           )}
         ></input>
+        {error && (
+          <p role="alert">{error}</p>
+        )}
       </div>
     </article>
   )
