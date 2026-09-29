@@ -1,3 +1,13 @@
+import {
+  useDispatch, useSelector
+} from 'react-redux';
+
+import type {
+  AppDispatch, RootState
+} from '../../store/store';
+
+import { commandStarted, commandFailed } from '../../features/devices/devicesSlice';
+
 import type { HomeAssistantEntity } from "../../features/devices/types";
 import { useEffect, useState } from 'react'
 import {
@@ -23,8 +33,10 @@ export default function LightCard({
     : 0;
 
   const [sliderValue, setSliderValue] = useState(brightness);
-  const [isUpdating, setIsUpdating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const dispatch = useDispatch<AppDispatch>();
+
+  const isUpdating = useSelector((state: RootState) => Boolean(state.devices.pendingCommands[entity.entity_id]));
 
   const debouncedSetLightBrightness = useDebouncedCallback(
     async (brightness: number) => {
@@ -45,9 +57,17 @@ export default function LightCard({
   }, [brightness]);
 
   async function handleToggle() {
+    const expectedState = isOn ? "off": "on";
+
     try {
-      setIsUpdating(true);
       setError(null);
+
+      dispatch(
+        commandStarted({
+          entityId: entity.entity_id,
+          expectedState
+        })
+      );
 
       if (isOn) {
         await turnOffLight(entity.entity_id)
@@ -57,9 +77,10 @@ export default function LightCard({
     } catch (error) {
       console.error("Failed to toggle light:", error);
 
+      dispatch(
+        commandFailed(entity.entity_id)
+      )
       setError("Failed to update light.");
-    } finally {
-      setIsUpdating(false);
     }
   }
   function handleBrightnessChange(

@@ -6,7 +6,7 @@ import type {
     RootState
 } from "../store/store";
 
-import { fetchDevices } from "../features/devices/devicesSlice";
+import { devicesSelectors, fetchDevices } from "../features/devices/devicesSlice";
 import { connectHomeAssistantSocket } from "../services/homeAssistantSocket";
 
 import LightCard from "../components/devices/LightCard";
@@ -16,7 +16,9 @@ import SensorCard from "../components/devices/SensorCard";
 export default function DashboardPage() {
     const dispatch = useDispatch<AppDispatch>();
 
-    const { entities, loading, error } = useSelector((state: RootState) => state.devices);
+    const entities = useSelector(devicesSelectors.selectAll);
+    const loading = useSelector((state: RootState) => state.devices.loading);
+    const error = useSelector((state: RootState) => state.devices.error);
 
     useEffect(() => {
         dispatch(fetchDevices());

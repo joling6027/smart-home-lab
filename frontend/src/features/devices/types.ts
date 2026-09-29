@@ -1,10 +1,3 @@
-// export interface Device {
-//     id: string;
-//     name: string;
-//     type: "light" | "fan" | "sensor";
-//     state: string;
-// }
-
 export interface HomeAssistantEntity {
     entity_id: string;
     state: string;
