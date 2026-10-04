@@ -12,6 +12,7 @@ home-assistant/config/home-assistant_v2.db*
 .env
 .env.*
 !.env.example
+/backend/.env
 
 # Installed dependencies
 node_modules/
