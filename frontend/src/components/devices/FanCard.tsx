@@ -1,8 +1,18 @@
 import {
+  useDispatch, useSelector
+} from 'react-redux';
+
+import type {
+  AppDispatch, RootState
+} from '../../store/store';
+
+import {
   useEffect,
-  useState
+  useState,
+  useRef
 } from "react";
 
+import { commandStarted, commandFailed, commandTimedOut } from '../../features/devices/devicesSlice';
 import type { HomeAssistantEntity } from "../../features/devices/types";
 
 import {
@@ -10,6 +20,7 @@ import {
   turnOffFan,
   setFanSpeed
 } from "../../services/homeAssistantApi";
+
 import { useDebouncedCallback } from "../../hooks/useDebouncedCallback";
 
 interface FanCardProps {
@@ -26,24 +37,38 @@ export default function FanCard({
       ? entity.attributes.percentage
       : 0;
 
+  const commandTimeoutRef = useRef<number | null>(null);
+
   const [sliderValue, setSliderValue] = useState(percentage);
-  const [isUpdating, setIsUpdating] = useState(false);
   const [sliderError, setSliderError] = useState<string | null>(null);
+  const dispatch = useDispatch<AppDispatch>();
+
+  const pendingCommand = useSelector(
+    (state: RootState) => state.devices.pendingCommands[entity.entity_id]
+  )
+
+  const isUpdating = Boolean(pendingCommand);
 
   const debouncedSetFanSpeed = useDebouncedCallback(
     async (speed: number) => {
       try {
-        setSliderError(null);
+        dispatch(
+          commandStarted({
+            entityId: entity.entity_id,
+            type: "percentage",
+            expectedValue: speed
+          })
+        )
 
         await setFanSpeed(
           entity.entity_id,
           speed
         );
       } catch (error) {
-        console.error(
-          "Failed to change fan speed:",
-          error
-        );
+        dispatch(commandFailed({
+          entityId: entity.entity_id,
+          message: "Failed to update speed."
+        }))
       }
     }, 300
   )
@@ -52,10 +77,42 @@ export default function FanCard({
     setSliderValue(percentage);
   },[percentage]);
 
+  useEffect(() => {
+    return () => {
+      if (commandTimeoutRef.current !== null) {
+        clearTimeout(commandTimeoutRef.current);
+      }
+    }
+  },[])
+
+  useEffect(() => {
+    if (!pendingCommand &&
+      commandTimeoutRef.current !== null
+    ) {
+      clearTimeout(commandTimeoutRef.current);
+      commandTimeoutRef.current = null;
+    }
+  },[pendingCommand])
+
   async function handleToggle() {
+    const expectedState = isOn ? "off": "on";
+
     try {
-      setIsUpdating(true);
       setSliderError(null);
+
+      dispatch(
+        commandStarted({
+          entityId: entity.entity_id,
+          type: "state",
+          expectedValue: expectedState
+        })
+      );
+
+      commandTimeoutRef.current = window.setTimeout(() => {
+        dispatch(
+          commandTimedOut(entity.entity_id)
+        )
+      },5000)
 
       if (isOn) {
         await turnOffFan(entity.entity_id)
@@ -63,11 +120,13 @@ export default function FanCard({
         await turnOnFan(entity.entity_id)
       }
     } catch (error) {
-      console.error("Failed to toggle fan:", error);
+      if (commandTimeoutRef.current !== null) {
+        clearTimeout(commandTimeoutRef.current);
+      }
 
-      setSliderError("Failed to update fan.");
-    } finally {
-      setIsUpdating(false);
+      dispatch(
+        commandFailed({ entityId: entity.entity_id, message: "Failed to update speed." })
+      )
     }
   }
 

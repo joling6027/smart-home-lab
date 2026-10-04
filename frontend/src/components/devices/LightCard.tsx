@@ -6,10 +6,10 @@ import type {
   AppDispatch, RootState
 } from '../../store/store';
 
-import { commandStarted, commandFailed } from '../../features/devices/devicesSlice';
+import { commandStarted, commandFailed, commandTimedOut } from '../../features/devices/devicesSlice';
 
 import type { HomeAssistantEntity } from "../../features/devices/types";
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import {
   turnOnLight,
   turnOffLight,
@@ -32,21 +32,40 @@ export default function LightCard({
     ? entity.attributes.brightness
     : 0;
 
+  const commandTimeoutRef = useRef<number | null>(null);
+
   const [sliderValue, setSliderValue] = useState(brightness);
   const [error, setError] = useState<string | null>(null);
   const dispatch = useDispatch<AppDispatch>();
 
-  const isUpdating = useSelector((state: RootState) => Boolean(state.devices.pendingCommands[entity.entity_id]));
+  const pendingCommand = useSelector(
+    (state: RootState) => state.devices.pendingCommands[entity.entity_id]
+  );
+
+  const isUpdating = Boolean(pendingCommand);
+  const reduxError = useSelector(
+    (state: RootState) => state.devices.commandErrors[
+      entity.entity_id
+    ]
+  )
 
   const debouncedSetLightBrightness = useDebouncedCallback(
     async (brightness: number) => {
       try {
-        setError(null);
+        dispatch(
+          commandStarted({
+            entityId: entity.entity_id,
+            type: "brightness",
+            expectedValue: brightness
+          })
+        )
 
         await setLightBrightness(entity.entity_id, brightness);
       } catch (error) {
-        console.error("Failed to change light brightness");
-        setError("Failed to update light brightness");
+        dispatch(commandFailed({
+          entityId: entity.entity_id,
+          message: "Failed to update brightness."
+        }))
       }
     },
     300
@@ -55,6 +74,23 @@ export default function LightCard({
   useEffect(() => {
     setSliderValue(brightness);
   }, [brightness]);
+
+  useEffect(() => {
+    return () => {
+      if (commandTimeoutRef.current !== null) {
+        clearTimeout(commandTimeoutRef.current);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!pendingCommand &&
+      commandTimeoutRef.current !== null
+    ) {
+      clearTimeout(commandTimeoutRef.current);
+      commandTimeoutRef.current = null;
+    }
+  },[pendingCommand])
 
   async function handleToggle() {
     const expectedState = isOn ? "off": "on";
@@ -65,22 +101,32 @@ export default function LightCard({
       dispatch(
         commandStarted({
           entityId: entity.entity_id,
-          expectedState
+          type: "state",
+          expectedValue: expectedState
         })
       );
+
+      commandTimeoutRef.current = window.setTimeout(() => {
+        dispatch(
+          commandTimedOut(entity.entity_id)
+        )
+      }, 5000)
 
       if (isOn) {
         await turnOffLight(entity.entity_id)
       } else {
         await turnOnLight(entity.entity_id)
       }
+
     } catch (error) {
-      console.error("Failed to toggle light:", error);
+
+      if (commandTimeoutRef.current !== null) {
+        clearTimeout(commandTimeoutRef.current);
+      }
 
       dispatch(
-        commandFailed(entity.entity_id)
+        commandFailed({entityId: entity.entity_id, message: "Failed to update light."})
       )
-      setError("Failed to update light.");
     }
   }
   function handleBrightnessChange(
@@ -118,12 +164,11 @@ export default function LightCard({
             Number(event.target.value)
           )}
         ></input>
-        {error && (
-          <p role="alert">{error}</p>
+        {(reduxError || error) && (
+          <p role="alert">{reduxError || error}</p>
         )}
       </div>
     </article>
   )
 }
-
 

@@ -12,7 +12,7 @@ import { getStates } from "../../services/homeAssistantApi";
 const TRACKED_ENTITY_IDS = new Set([
     "sensor.living_room_temperature",
     "light.floor_lamp",
-    "fan.living_room_fan"
+    "fan.fan"
 ]);
 
 const devicesAdapter =
@@ -21,7 +21,9 @@ const devicesAdapter =
     });
 
 interface PendingCommand {
-    expectedState: string;
+    type: "state" | "brightness" | "percentage";
+    expectedValue: string | number;
+    startedAt: number;
 }
 
 const initialState = devicesAdapter.getInitialState({
@@ -31,6 +33,11 @@ const initialState = devicesAdapter.getInitialState({
     pendingCommands: {} as Record<
         string,
         PendingCommand | undefined
+    >,
+
+    commandErrors: {} as Record<
+        string,
+        string | undefined
     >
 });
 
@@ -62,13 +69,26 @@ const devicesSlice = createSlice({
             const pending =
                 state.pendingCommands[entity.entity_id];
 
+            if (!pending) return;
+
+            let confirmed = false;
+
             if (
-                pending &&
-                entity.state === pending.expectedState
+                pending.type === "state" &&
+                entity.state === pending.expectedValue
             ) {
-                delete state.pendingCommands[
-                    entity.entity_id
-                ];
+                confirmed = true;
+            }
+
+            if (pending.type === "brightness" &&
+                entity.attributes?.brightness === pending.expectedValue
+            ) {
+                confirmed = true;
+            }
+
+            if (confirmed) {
+                delete state.pendingCommands[entity.entity_id];
+                delete state.commandErrors[entity.entity_id];
             }
         },
 
@@ -76,26 +96,54 @@ const devicesSlice = createSlice({
             state,
             action: PayloadAction<{
                 entityId: string;
-                expectedState: string;
+                type: PendingCommand["type"];
+                expectedValue: string | number;
             }>
         ) {
             const {
                 entityId,
-                expectedState
+                type,
+                expectedValue
             } = action.payload;
 
             state.pendingCommands[entityId] = {
-                expectedState
+                type,
+                expectedValue,
+                startedAt: Date.now()
             };
+
+            delete state.commandErrors[entityId];
         },
 
         commandFailed(
             state,
+            action: PayloadAction<{
+                entityId: string;
+                message: string;
+            }>
+        ) {
+            const {
+                entityId,
+                message
+            } = action.payload;
+
+            delete state.pendingCommands[entityId];
+            state.commandErrors[entityId] = message;
+        },
+
+        commandTimedOut(
+            state,
             action: PayloadAction<string>
         ) {
-            delete state.pendingCommands[
-                action.payload
-            ];
+            const entityId = action.payload;
+
+            if (!state.pendingCommands[entityId]) {
+                return;
+            }
+
+            delete state.pendingCommands[entityId];
+
+            state.commandErrors[entityId] = "The device did not confirm the change.";
         }
     },
 
@@ -141,7 +189,8 @@ const devicesSlice = createSlice({
 export const {
     updateEntity,
     commandStarted,
-    commandFailed
+    commandFailed,
+    commandTimedOut
 } = devicesSlice.actions;
 
 export default devicesSlice.reducer;

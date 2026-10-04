@@ -1,14 +1,14 @@
 import type { AppDispatch } from "../store/store";
 import { updateEntity } from "../features/devices/devicesSlice";
 
-const HA_TOKEN = import.meta.env.VITE_HA_TOKEN;
+// const HA_TOKEN = import.meta.env.VITE_HA_TOKEN;
 
 export function connectHomeAssistantSocket(
   dispatch: AppDispatch
 ) {
   const protocol = window.location.protocol === "https:" ? "wss:" : "ws";
   const socket = new WebSocket(
-    `${protocol}://${window.location.host}/api/websocket`
+    `${protocol}://${window.location.host}/ws`
   );
 
   socket.addEventListener("open", () => {
@@ -24,7 +24,7 @@ export function connectHomeAssistantSocket(
       socket.send(
         JSON.stringify({
           type: "auth",
-          access_token: HA_TOKEN
+          // access_token: HA_TOKEN
         })
       );
       return;
